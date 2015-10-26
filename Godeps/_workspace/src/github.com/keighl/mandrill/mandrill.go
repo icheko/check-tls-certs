@@ -29,8 +29,8 @@
 //
 // http://help.mandrill.com/entries/21678522-How-do-I-use-merge-tags-to-add-dynamic-content-
 //
-//     message.GlobalMergeVars := mandrill.ConvertMapToVariables(map[string]string{"name": "Bob"})
-//     message.MergeVars := mandrill.ConvertMapToVariablesForRecipient("bob@example.com", map[string]string{"name": "Bob"})
+//     message.GlobalMergeVars := mandrill.ConvertMapToVariables(map[string]interface{}{"name": "Bob"})
+//     message.MergeVars := mandrill.ConvertMapToVariablesForRecipient("bob@example.com", map[string]interface{}{"name": "Bob"})
 //
 // Integration Testing Keys
 
@@ -40,7 +40,7 @@
 //     c := ClientWithKey("SANDBOX_SUCCESS")
 
 //     // Sending messages will error, but without a real API request
-//     c := ClientWithKey("SANDBOX_SUCCESS")
+//     c := ClientWithKey("SANDBOX_ERROR")
 
 package mandrill
 
@@ -166,7 +166,7 @@ type RcptMetadata struct {
 	// the email address of the recipient that the metadata is associated with
 	Rcpt string `json:"rcpt"`
 	// an associated array containing the recipient's unique metadata. If a key exists in both the per-recipient metadata and the global metadata, the per-recipient metadata will be used.
-	Values map[string]string `json:"values"`
+	Values map[string]interface{} `json:"values"`
 }
 
 // Attachment represents a single supported attachment
@@ -243,7 +243,7 @@ func (c *Client) MessagesSend(message *Message) (responses []*Response, err erro
 }
 
 // MessagesSendTemplate sends a message using a Mandrill template
-func (c *Client) MessagesSendTemplate(message *Message, templateName string, contents map[string]string) (responses []*Response, err error) {
+func (c *Client) MessagesSendTemplate(message *Message, templateName string, contents interface{}) (responses []*Response, err error) {
 
 	var data struct {
 		Key             string      `json:"key"`
@@ -276,7 +276,7 @@ func (c *Client) sendMessagePayload(data interface{}, path string) (responses []
 	}
 
 	if c.Key == "SANDBOX_ERROR" {
-		return nil, errors.New("SANDBOX_SUCCESS")
+		return nil, errors.New("SANDBOX_ERROR")
 	}
 
 	payload, _ := json.Marshal(data)
@@ -311,9 +311,24 @@ func (m *Message) AddRecipient(email string, name string, sendType string) {
 }
 
 // ConvertMapToVariables converts a regular string/string map into the Variable struct
-func ConvertMapToVariables(m map[string]string) []*Variable {
-	variables := make([]*Variable, 0, len(m))
-	for k, v := range m {
+// e.g. `vars := ConvertMapToVariables(map[string]interface{}{"bob": "cheese"})`
+func ConvertMapToVariables(i interface{}) []*Variable {
+	imap := map[string]interface{}{}
+
+	switch i.(type) {
+	// Handle older API for passing just map[string]string
+	case map[string]string:
+		for k, v := range i.(map[string]string) {
+			imap[k] = v
+		}
+	case map[string]interface{}:
+		imap, _ = i.(map[string]interface{})
+	default:
+		return []*Variable{}
+	}
+
+	variables := make([]*Variable, 0, len(imap))
+	for k, v := range imap {
 		variables = append(variables, &Variable{k, v})
 	}
 	return variables
@@ -321,17 +336,17 @@ func ConvertMapToVariables(m map[string]string) []*Variable {
 
 // MapToVars converts a regular string/string map into the Variable struct
 // Alias of `ConvertMapToVariables`
-func MapToVars(m map[string]string) []*Variable {
+func MapToVars(m interface{}) []*Variable {
 	return ConvertMapToVariables(m)
 }
 
 // ConvertMapToVariablesForRecipient converts a regular string/string map into the RcptMergeVars struct
-func ConvertMapToVariablesForRecipient(email string, m map[string]string) *RcptMergeVars {
+func ConvertMapToVariablesForRecipient(email string, m interface{}) *RcptMergeVars {
 	return &RcptMergeVars{Rcpt: email, Vars: ConvertMapToVariables(m)}
 }
 
 // MapToRecipientVars converts a regular string/string map into the RcptMergeVars struct
 // Alias of `ConvertMapToVariablesForRecipient`
-func MapToRecipientVars(email string, m map[string]string) *RcptMergeVars {
+func MapToRecipientVars(email string, m interface{}) *RcptMergeVars {
 	return ConvertMapToVariablesForRecipient(email, m)
 }
