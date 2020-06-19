@@ -104,8 +104,7 @@ func main() {
 	flag.Parse()
 
 	if len(*hostsFile) == 0 {
-		flag.Usage()
-		return
+		*hostsFile = "hosts"
 	}
 	if *warnYears < 0 {
 		*warnYears = 0
