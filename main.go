@@ -13,6 +13,7 @@ import (
 	"github.com/keighl/mandrill"
 	"io/ioutil"
 	"log"
+	"net"
 	"os"
 	"strings"
 	"sync"
@@ -93,6 +94,7 @@ type certErrors struct {
 
 type hostResult struct {
 	host  string
+	ip    string
 	err   error
 	certs []certErrors
 }
@@ -213,23 +215,58 @@ func queueHosts(done <-chan struct{}) <-chan string {
 
 func processQueue(done <-chan struct{}, hosts <-chan string, results chan<- hostResult) {
 	for host := range hosts {
-		select {
-		case results <- checkHost(host):
-		case <-done:
-			return
+		ips := getIPsWithPort(host)
+		for _, ip := range ips {
+			select {
+			case results <- checkHost(ip, host):
+			case <-done:
+				return
+			}
 		}
 	}
 }
 
-func checkHost(host string) (result hostResult) {
+func getIPsWithPort(host string) []string {
+	ips := getIPs(getHost(host))
+	for i, ip := range ips {
+		ips[i] = ip + ":" + getPort(host)
+	}
+
+	return ips
+}
+
+func getIPs(host string) []string {
+	ips, err := net.LookupHost(host)
+	if err != nil {
+		panic(err)
+	}
+	return ips
+}
+
+func getHost(host string) string {
+	result := strings.Split(host, ":")
+	return result[0]
+}
+
+func getPort(host string) string {
+	result := strings.Split(host, ":")
+	return result[1]
+}
+
+func checkHost(ip string, host string) (result hostResult) {
 	result = hostResult{
 		host:  host,
+		ip:    ip,
 		certs: []certErrors{},
 	}
 
 	//load ca certs. bundle
-	cert_pool, err := gocertifi.CACerts()
-	conn, err := tls.Dial("tcp", host, &tls.Config{RootCAs: cert_pool})
+	certPool, err := gocertifi.CACerts()
+	config := &tls.Config{
+		RootCAs:    certPool,
+		ServerName: getHost(host),
+	}
+	conn, err := tls.Dial("tcp", ip, config)
 
 	if err != nil {
 		result.err = err
@@ -251,16 +288,16 @@ func checkHost(host string) (result hostResult) {
 			if timeNow.AddDate(*warnYears, *warnMonths, *warnDays).After(cert.NotAfter) {
 				expiresIn := int64(cert.NotAfter.Sub(timeNow).Hours())
 				if expiresIn <= 48 {
-					cErrs = append(cErrs, fmt.Errorf(errExpiringShortly, host, cert.Subject.CommonName, cert.SerialNumber, expiresIn))
+					cErrs = append(cErrs, fmt.Errorf(errExpiringShortly, ip, cert.Subject.CommonName, cert.SerialNumber, expiresIn))
 				} else {
-					cErrs = append(cErrs, fmt.Errorf(errExpiringSoon, host, cert.Subject.CommonName, cert.SerialNumber, expiresIn/24))
+					cErrs = append(cErrs, fmt.Errorf(errExpiringSoon, ip, cert.Subject.CommonName, cert.SerialNumber, expiresIn/24))
 				}
 			}
 
 			// Check the signature algorithm, ignoring the root certificate.
 			if alg, exists := sunsetSigAlgs[cert.SignatureAlgorithm]; *checkSigAlg && exists && certNum != len(chain)-1 {
 				if cert.NotAfter.Equal(alg.sunsetsAt) || cert.NotAfter.After(alg.sunsetsAt) {
-					cErrs = append(cErrs, fmt.Errorf(errSunsetAlg, host, cert.Subject.CommonName, cert.SerialNumber, alg.name))
+					cErrs = append(cErrs, fmt.Errorf(errSunsetAlg, ip, cert.Subject.CommonName, cert.SerialNumber, alg.name))
 				}
 			}
 
