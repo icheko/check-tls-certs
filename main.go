@@ -9,8 +9,6 @@ import (
 	"crypto/x509"
 	"flag"
 	"fmt"
-	"github.com/certifi/gocertifi"
-	"github.com/keighl/mandrill"
 	"io/ioutil"
 	"log"
 	"net"
@@ -18,6 +16,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/certifi/gocertifi"
+	"github.com/keighl/mandrill"
 )
 
 const defaultConcurrency = 8
@@ -124,9 +125,9 @@ func main() {
 
 	//worker: run once a day
 	for {
-		log.Println("worker up!...checking ssl certs")
+		log.Println("checking ssl certs ...")
 		processHosts()
-		log.Println("worker done...going away for", SLEEP_DURATION, "hours")
+		log.Println("done. going away for", SLEEP_DURATION, "hours")
 		time.Sleep(SLEEP_DURATION * time.Hour)
 	}
 }
@@ -177,7 +178,7 @@ func processHosts() {
 		email_details.mail_text = certMessages
 		sendMail(email_details)
 	} else {
-		log.Printf("no certifcate(s) are/is expiring in %d years, %d months, %d days", *warnYears, *warnMonths, *warnDays)
+		log.Printf("No certificate is expiring in %d years, %d months, %d days", *warnYears, *warnMonths, *warnDays)
 	}
 }
 
