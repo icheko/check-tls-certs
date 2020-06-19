@@ -122,7 +122,6 @@ func main() {
 		*concurrency = defaultConcurrency
 	}
 
-	//worker: run once a day
 	for {
 		log.Println("checking ssl certs ...")
 		processHosts()
@@ -155,7 +154,7 @@ func processHosts() {
 
 	for r := range results {
 		if r.err != nil {
-			log.Printf("%s: %v\n", r.host, r.err)
+			//log.Printf("%s: %v\n", r.host, r.err)
 			//cert(s) already expired
 			certMessages += getCurrentTime() + ": " + r.host + " " + r.err.Error() + "\n"
 			continue
@@ -168,17 +167,17 @@ func processHosts() {
 		}
 	}
 
-	//send email notifications to admins
-	if certMessages != "" {
-		fmt.Println(certMessages)
-
-		email_details := &emailDetails{}
-		email_details.subject = "Heroku app - check certificate details"
-		email_details.mail_text = certMessages
-		sendMail(email_details)
-	} else {
+	if certMessages == "" {
 		log.Printf("No certificate is expiring in %d years, %d months, %d days", *warnYears, *warnMonths, *warnDays)
+		return
 	}
+
+	fmt.Println(certMessages)
+
+	emailDetails := &emailDetails{}
+	emailDetails.subject = "Heroku app - check certificate details"
+	emailDetails.mail_text = certMessages
+	//sendMail(email_details)
 }
 
 // return current time in YYYY-MM-dd HH:mm:ss
