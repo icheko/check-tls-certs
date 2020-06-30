@@ -87,6 +87,7 @@ var (
 	checkSigAlg = flag.Bool("check-sig-alg", true, "Verify that non-root certificates are using a good signature algorithm.")
 	concurrency = flag.Int("concurrency", defaultConcurrency, "Maximum number of hosts to check at once.")
 	useIPV6     = flag.Bool("ipv6", false, "Use IPV6 to establish connections.")
+	daemon      = flag.Bool("d", false, "Start in daemon mode")
 )
 
 type certErrors struct {
@@ -123,15 +124,23 @@ func main() {
 		*concurrency = defaultConcurrency
 	}
 
-	for {
-		log.Println("checking ssl certs ...")
-		if *useIPV6 {
-			log.Println("Using IPV6")
+	if *daemon {
+		for {
+			startUp()
+			log.Println("done. going away for", SLEEP_DURATION, "hours")
+			time.Sleep(SLEEP_DURATION * time.Hour)
 		}
-		processHosts()
-		log.Println("done. going away for", SLEEP_DURATION, "hours")
-		time.Sleep(SLEEP_DURATION * time.Hour)
+	} else {
+		startUp()
 	}
+}
+
+func startUp() {
+	log.Println("checking ssl certs ...")
+	if *useIPV6 {
+		log.Println("Using IPV6")
+	}
+	processHosts()
 }
 
 func processHosts() {
@@ -177,6 +186,7 @@ func processHosts() {
 	}
 
 	fmt.Println(certMessages)
+	os.Exit(1)
 
 	emailDetails := &emailDetails{}
 	emailDetails.subject = "Heroku app - check certificate details"
