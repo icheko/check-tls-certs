@@ -86,6 +86,7 @@ var (
 	warnDays    = flag.Int("days", 0, "Warn if the certificate will expire within this many days.")
 	checkSigAlg = flag.Bool("check-sig-alg", true, "Verify that non-root certificates are using a good signature algorithm.")
 	concurrency = flag.Int("concurrency", defaultConcurrency, "Maximum number of hosts to check at once.")
+	useIPV6     = flag.Bool("ipv6", false, "Use IPV6 to establish connections.")
 )
 
 type certErrors struct {
@@ -124,6 +125,9 @@ func main() {
 
 	for {
 		log.Println("checking ssl certs ...")
+		if *useIPV6 {
+			log.Println("Using IPV6")
+		}
 		processHosts()
 		log.Println("done. going away for", SLEEP_DURATION, "hours")
 		time.Sleep(SLEEP_DURATION * time.Hour)
@@ -215,6 +219,7 @@ func queueHosts(done <-chan struct{}) <-chan string {
 func processQueue(done <-chan struct{}, hosts <-chan string, results chan<- hostResult) {
 	for host := range hosts {
 		ips := getIPsWithPort(host)
+		// log.Println("Host: " + host + " IPs: " + strings.Join(ips, ", "))
 		for _, ip := range ips {
 			select {
 			case results <- checkHost(ip, host):
@@ -226,12 +231,25 @@ func processQueue(done <-chan struct{}, hosts <-chan string, results chan<- host
 }
 
 func getIPsWithPort(host string) []string {
+	filteredIps := []string{}
 	ips := getIPs(getHost(host))
-	for i, ip := range ips {
-		ips[i] = ip + ":" + getPort(host)
+	for _, ip := range ips {
+		if *useIPV6 == false && isIPv4(ip) {
+			filteredIps = append(filteredIps, ip+":"+getPort(host))
+		} else if *useIPV6 == true && isIPv6(ip) {
+			filteredIps = append(filteredIps, "["+ip+"]:"+getPort(host))
+		}
 	}
 
-	return ips
+	return filteredIps
+}
+
+func isIPv4(address string) bool {
+	return strings.Count(address, ":") < 2
+}
+
+func isIPv6(address string) bool {
+	return strings.Count(address, ":") >= 2
 }
 
 func getIPs(host string) []string {
