@@ -41,10 +41,14 @@ type envVariables struct {
 }
 
 const (
-	errExpiringShortly = "%s: ** '%s' (S/N %X) expires in %d hours! **"
-	errExpiringSoon    = "%s: '%s' (S/N %X) expires in roughly %d days."
-	errSunsetAlg       = "%s: '%s' (S/N %X) expires after the sunset date for its signature algorithm '%s'."
-	fmtCertInfo        = "%s: (S/N %X) expires in roughly %d days."
+	errExpiringShortly      = "%s: ** '%s' (S/N %X) expires in %d hours! **"
+	errExpiringSoon         = "%s: '%s' (S/N %X) expires in roughly %d days."
+	errSunsetAlg            = "%s: '%s' (S/N %X) expires after the sunset date for its signature algorithm '%s'."
+	fmtCertInfo             = "%s: (S/N %X) expires in roughly %d days."
+	fmtCertInfoNoExpiration = "%s: (S/N %X)"
+	resultsCertInfo         = "CERT-INFO: %s (%s) found cert %s\n"
+	resultsCertError        = "CERT-ERROR: %s\n"
+	resultsError            = "ERROR: %s '%s'\n"
 )
 
 type sigAlgSunset struct {
@@ -82,15 +86,17 @@ var sunsetSigAlgs = map[x509.SignatureAlgorithm]sigAlgSunset{
 }
 
 var (
-	hostsFile   = flag.String("hosts", "", "The path to the file containing a list of hosts to check.")
-	warnYears   = flag.Int("years", 0, "Warn if the certificate will expire within this many years.")
-	warnMonths  = flag.Int("months", 0, "Warn if the certificate will expire within this many months.")
-	warnDays    = flag.Int("days", 0, "Warn if the certificate will expire within this many days.")
-	checkSigAlg = flag.Bool("check-sig-alg", true, "Verify that non-root certificates are using a good signature algorithm.")
-	concurrency = flag.Int("concurrency", defaultConcurrency, "Maximum number of hosts to check at once.")
-	useIPV6     = flag.Bool("ipv6", false, "Use IPV6 to establish connections.")
-	daemon      = flag.Bool("d", false, "Start in daemon mode")
-	info        = flag.Bool("info", false, "Print certificate info")
+	hostsFile    = flag.String("hosts", "", "The path to the file containing a list of hosts to check.")
+	warnYears    = flag.Int("years", 0, "Warn if the certificate will expire within this many years.")
+	warnMonths   = flag.Int("months", 0, "Warn if the certificate will expire within this many months.")
+	warnDays     = flag.Int("days", 0, "Warn if the certificate will expire within this many days.")
+	checkSigAlg  = flag.Bool("check-sig-alg", true, "Verify that non-root certificates are using a good signature algorithm.")
+	concurrency  = flag.Int("concurrency", defaultConcurrency, "Maximum number of hosts to check at once.")
+	useIPV6      = flag.Bool("ipv6", false, "Use IPV6 to establish connections.")
+	daemon       = flag.Bool("d", false, "Start in daemon mode")
+	info         = flag.Bool("info", false, "Print certificate info")
+	noTimeStamps = flag.Bool("nots", false, "Don't print timestamps in info/error messages")
+	compare      = flag.Bool("compare", false, "Easily compare results by exclusing timestamps and certificate expiration (implies -info, -nots)")
 )
 
 type certErrors struct {
@@ -132,7 +138,10 @@ func main() {
 	if *concurrency < 0 {
 		*concurrency = defaultConcurrency
 	}
-
+	if *compare {
+		*info = true
+		*noTimeStamps = true
+	}
 	if *daemon {
 		for {
 			startUp()
@@ -150,6 +159,30 @@ func startUp() {
 		log.Println("Using IPV6")
 	}
 	processHosts()
+}
+
+func buildErrorMessage(host, error string) string {
+	if *noTimeStamps {
+		return fmt.Sprintf(resultsError, host, error)
+	}
+
+	return fmt.Sprintf("%s "+resultsError, getCurrentTime(), host, error)
+}
+
+func buildCertErrorMessage(error string) string {
+	if *noTimeStamps {
+		return fmt.Sprintf(resultsCertError, error)
+	}
+
+	return fmt.Sprintf("%s "+resultsCertError, getCurrentTime(), error)
+}
+
+func buildCertInfoMessage(host, ip, info string) string {
+	if *noTimeStamps {
+		return fmt.Sprintf(resultsCertInfo, host, ip, info)
+	}
+
+	return fmt.Sprintf("%s "+resultsCertInfo, getCurrentTime(), host, ip, info)
 }
 
 func processHosts() {
@@ -194,21 +227,25 @@ func processHosts() {
 		if r.err != nil {
 			//log.Printf("%s: %v\n", r.host, r.err)
 			//cert(s) already expired
-			certMessages += getCurrentTime() + ":ERROR: " + r.host + " " + r.err.Error() + "\n"
+			certMessages += buildErrorMessage(r.host, r.err.Error())
 			continue
 		}
 		// get cert details
 		for _, cert := range r.certs {
 			for _, err := range cert.errs {
-				certMessages += getCurrentTime() + ":CERT-ERROR: " + err.Error() + "\n"
+				certMessages += buildCertErrorMessage(err.Error())
 			}
 		}
 
-		certInfoMessages += fmt.Sprintf("%s:CERT-INFO: %s (%s) found cert. %s\n", getCurrentTime(), r.host, r.ip, r.certInfo.info)
+		certInfoMessages += buildCertInfoMessage(r.host, r.ip, r.certInfo.info)
 	}
 
 	if certInfoMessages != "" && *info {
 		fmt.Println(certInfoMessages)
+	}
+
+	if *compare {
+		return
 	}
 
 	if certMessages == "" {
@@ -227,8 +264,8 @@ func processHosts() {
 
 // return current time in YYYY-MM-dd HH:mm:ss
 func getCurrentTime() string {
-	t := time.Now().UTC()
-	currentTime := fmt.Sprintf("%d-%02d-%02d %02d:%02d:%02d UTC", t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second())
+	t := time.Now()
+	currentTime := fmt.Sprintf("%d/%02d/%02d %02d:%02d:%02d", t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second())
 	return currentTime
 }
 
@@ -359,10 +396,16 @@ func checkHost(ip string, host string) (result hostResult) {
 				}
 			}
 
-			if *info && len(cErrs) == 0 {
+			if *info && certNum == 0 {
+				var info string
+				if *compare {
+					info = fmt.Sprintf(fmtCertInfoNoExpiration, cert.Subject.CommonName, cert.SerialNumber)
+				} else {
+					info = fmt.Sprintf(fmtCertInfo, cert.Subject.CommonName, cert.SerialNumber, expiresIn/24)
+				}
 				result.certInfo = certInfo{
 					commonName: cert.Subject.CommonName,
-					info:       fmt.Sprintf(fmtCertInfo, cert.Subject.CommonName, cert.SerialNumber, expiresIn/24),
+					info:       info,
 				}
 			}
 
