@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/tls"
 	"crypto/x509"
 	"flag"
@@ -213,30 +214,30 @@ func processHosts() {
 	}
 
 	sort.SliceStable(resultsSorted, func(i, j int) bool {
-		var hosti string = resultsSorted[i].host
-		var hostj string = resultsSorted[j].host
-		var hostiLower = strings.ToLower(hosti)
-		var hostjLower = strings.ToLower(hostj)
+		var hostiLower = strings.ToLower(resultsSorted[i].host)
+		var hostjLower = strings.ToLower(resultsSorted[j].host)
+		var hostiIP = net.ParseIP(getHost(resultsSorted[i].ip))
+		var hostjIP = net.ParseIP(getHost(resultsSorted[j].ip))
+
 		if hostiLower == hostjLower {
-			return hosti < hostj
+			return bytes.Compare(hostiIP, hostjIP) < 0
 		}
 		return hostiLower < hostjLower
 	})
 
 	for _, r := range resultsSorted {
+		// connection errors, etc
 		if r.err != nil {
-			//log.Printf("%s: %v\n", r.host, r.err)
-			//cert(s) already expired
 			certMessages += buildErrorMessage(r.host, r.err.Error())
 			continue
 		}
-		// get cert details
+		// cert errors
 		for _, cert := range r.certs {
 			for _, err := range cert.errs {
 				certMessages += buildCertErrorMessage(err.Error())
 			}
 		}
-
+		// cert info
 		certInfoMessages += buildCertInfoMessage(r.host, r.ip, r.certInfo.info)
 	}
 
