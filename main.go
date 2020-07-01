@@ -87,6 +87,7 @@ var sunsetSigAlgs = map[x509.SignatureAlgorithm]sigAlgSunset{
 }
 
 var (
+	help         = flag.Bool("help", false, "Show help screen.")
 	hostsFile    = flag.String("hosts", "", "The path to the file containing a list of hosts to check.")
 	warnYears    = flag.Int("years", 0, "Warn if the certificate will expire within this many years.")
 	warnMonths   = flag.Int("months", 0, "Warn if the certificate will expire within this many months.")
@@ -121,6 +122,10 @@ type hostResult struct {
 func main() {
 	flag.Parse()
 
+	if *help {
+		flag.Usage()
+		return
+	}
 	if len(*hostsFile) == 0 {
 		*hostsFile = "hosts"
 	}
