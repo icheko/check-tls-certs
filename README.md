@@ -20,6 +20,11 @@ This app uses the following options:
 - `-days`: warn if the certificate expires within X days. Defaults to 30 days.
 - `-concurrency`: Maximum number of hosts to check at once. Defaults to 8 hosts.
 - `-check-sig-alg`: Check certificate's signature algorithm. Defaults to true.
+- `-ipv6`: Use IPV6 to establish connections.
+- `-info`: Print certificate info for each host.
+- `-nots`: Don't print timestamps in info/error messages.
+- `-compare`: Easily compare results by exclusing timestamps and certificate expiration (implies -info, -nots).
+- `-d`: Start in daemon mode.
 
 Examples usage:
 ```

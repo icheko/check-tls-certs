@@ -94,10 +94,10 @@ var (
 	checkSigAlg  = flag.Bool("check-sig-alg", true, "Verify that non-root certificates are using a good signature algorithm.")
 	concurrency  = flag.Int("concurrency", defaultConcurrency, "Maximum number of hosts to check at once.")
 	useIPV6      = flag.Bool("ipv6", false, "Use IPV6 to establish connections.")
-	daemon       = flag.Bool("d", false, "Start in daemon mode")
-	info         = flag.Bool("info", false, "Print certificate info")
-	noTimeStamps = flag.Bool("nots", false, "Don't print timestamps in info/error messages")
-	compare      = flag.Bool("compare", false, "Easily compare results by exclusing timestamps and certificate expiration (implies -info, -nots)")
+	daemon       = flag.Bool("d", false, "Start in daemon mode.")
+	info         = flag.Bool("info", false, "Print certificate info.")
+	noTimeStamps = flag.Bool("nots", false, "Don't print timestamps in info/error messages.")
+	compare      = flag.Bool("compare", false, "Easily compare results by exclusing timestamps and certificate expiration (implies -info, -nots).")
 )
 
 type certErrors struct {
