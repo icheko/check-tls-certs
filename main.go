@@ -13,6 +13,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -43,6 +44,7 @@ const (
 	errExpiringShortly = "%s: ** '%s' (S/N %X) expires in %d hours! **"
 	errExpiringSoon    = "%s: '%s' (S/N %X) expires in roughly %d days."
 	errSunsetAlg       = "%s: '%s' (S/N %X) expires after the sunset date for its signature algorithm '%s'."
+	fmtCertInfo        = "%s: (S/N %X) expires in roughly %d days."
 )
 
 type sigAlgSunset struct {
@@ -88,6 +90,7 @@ var (
 	concurrency = flag.Int("concurrency", defaultConcurrency, "Maximum number of hosts to check at once.")
 	useIPV6     = flag.Bool("ipv6", false, "Use IPV6 to establish connections.")
 	daemon      = flag.Bool("d", false, "Start in daemon mode")
+	info        = flag.Bool("info", false, "Print certificate info")
 )
 
 type certErrors struct {
@@ -95,11 +98,17 @@ type certErrors struct {
 	errs       []error
 }
 
+type certInfo struct {
+	commonName string
+	info       string
+}
+
 type hostResult struct {
-	host  string
-	ip    string
-	err   error
-	certs []certErrors
+	host     string
+	ip       string
+	err      error
+	certs    []certErrors
+	certInfo certInfo
 }
 
 func main() {
@@ -163,21 +172,43 @@ func processHosts() {
 		close(results)
 	}()
 
-	var certMessages string
+	var certMessages, certInfoMessages string
+	var resultsSorted []hostResult
 
 	for r := range results {
+		resultsSorted = append(resultsSorted, r)
+	}
+
+	sort.SliceStable(resultsSorted, func(i, j int) bool {
+		var hosti string = resultsSorted[i].host
+		var hostj string = resultsSorted[j].host
+		var hostiLower = strings.ToLower(hosti)
+		var hostjLower = strings.ToLower(hostj)
+		if hostiLower == hostjLower {
+			return hosti < hostj
+		}
+		return hostiLower < hostjLower
+	})
+
+	for _, r := range resultsSorted {
 		if r.err != nil {
 			//log.Printf("%s: %v\n", r.host, r.err)
 			//cert(s) already expired
-			certMessages += getCurrentTime() + ": " + r.host + " " + r.err.Error() + "\n"
+			certMessages += getCurrentTime() + ":ERROR: " + r.host + " " + r.err.Error() + "\n"
 			continue
 		}
 		// get cert details
 		for _, cert := range r.certs {
 			for _, err := range cert.errs {
-				certMessages += getCurrentTime() + ": " + err.Error() + "\n"
+				certMessages += getCurrentTime() + ":CERT-ERROR: " + err.Error() + "\n"
 			}
 		}
+
+		certInfoMessages += fmt.Sprintf("%s:CERT-INFO: %s (%s) found cert. %s\n", getCurrentTime(), r.host, r.ip, r.certInfo.info)
+	}
+
+	if certInfoMessages != "" && *info {
+		fmt.Println(certInfoMessages)
 	}
 
 	if certMessages == "" {
@@ -310,21 +341,28 @@ func checkHost(ip string, host string) (result hostResult) {
 			}
 			checkedCerts[string(cert.Signature)] = struct{}{}
 			cErrs := []error{}
+			expiresIn := int64(cert.NotAfter.Sub(timeNow).Hours())
 
 			// Check the expiration.
 			if timeNow.AddDate(*warnYears, *warnMonths, *warnDays).After(cert.NotAfter) {
-				expiresIn := int64(cert.NotAfter.Sub(timeNow).Hours())
 				if expiresIn <= 48 {
-					cErrs = append(cErrs, fmt.Errorf(errExpiringShortly, ip, cert.Subject.CommonName, cert.SerialNumber, expiresIn))
+					cErrs = append(cErrs, fmt.Errorf(errExpiringShortly, cert.Subject.CommonName, ip, cert.SerialNumber, expiresIn))
 				} else {
-					cErrs = append(cErrs, fmt.Errorf(errExpiringSoon, ip, cert.Subject.CommonName, cert.SerialNumber, expiresIn/24))
+					cErrs = append(cErrs, fmt.Errorf(errExpiringSoon, cert.Subject.CommonName, ip, cert.SerialNumber, expiresIn/24))
 				}
 			}
 
 			// Check the signature algorithm, ignoring the root certificate.
 			if alg, exists := sunsetSigAlgs[cert.SignatureAlgorithm]; *checkSigAlg && exists && certNum != len(chain)-1 {
 				if cert.NotAfter.Equal(alg.sunsetsAt) || cert.NotAfter.After(alg.sunsetsAt) {
-					cErrs = append(cErrs, fmt.Errorf(errSunsetAlg, ip, cert.Subject.CommonName, cert.SerialNumber, alg.name))
+					cErrs = append(cErrs, fmt.Errorf(errSunsetAlg, cert.Subject.CommonName, ip, cert.SerialNumber, alg.name))
+				}
+			}
+
+			if *info && len(cErrs) == 0 {
+				result.certInfo = certInfo{
+					commonName: cert.Subject.CommonName,
+					info:       fmt.Sprintf(fmtCertInfo, cert.Subject.CommonName, cert.SerialNumber, expiresIn/24),
 				}
 			}
 
