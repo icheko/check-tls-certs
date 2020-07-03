@@ -28,13 +28,26 @@ This app uses the following options:
 
 Examples usage:
 ```
-$ go run main.go -hosts=hosts -days=30
-2015/06/04 14:53:27 no certifcate(s) are/is expiring in 0 years, 0 months, 30 days
+> check-tls-certs -info google.com
+2020/07/03 16:52:25 checking ssl certs ...
+2020/07/03 16:52:25 CERT-INFO: google.com:443 (172.217.2.238:443) found cert *.google.com: (S/N 7E10D901F7AC03CD080000000047EF8E) expires in roughly 67 days.
 
-$ go run main.go -hosts=hosts -years=1 -months=3 -days=2
-2015-06-04 11:54:12 UTC: cgspace.cgiar.org:443: 'cgspace.cgiar.org' (S/N 40D4587A33E30) expires in roughly 303 days.
+2020/07/03 16:52:25 No certificate is expiring in 0 years, 0 months, 30 days
+```
+```
+> check-tls-certs -hosts hosts -years 1
+2020/07/03 16:54:36 checking ssl certs ...
+2020/07/03 16:54:36 CERT-ERROR: gmail.com: '172.217.9.5:443' (S/N 658833231F511D8C080000000047F009) expires in roughly 67 days.
+2020/07/03 16:54:36 CERT-ERROR: *.google.com: '172.217.2.238:443' (S/N 7E10D901F7AC03CD080000000047EF8E) expires in roughly 67 days.
 ```
 
+### Install with Homebrew
+
+First install gomod package.
+```
+brew install filosottile/gomod/brew-gomod
+brew gomod github.com/icheko/check-tls-certs
+```
 
 ### Deploying to heroku
 - clone the repo & create a golang app on heroku:
