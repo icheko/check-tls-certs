@@ -23,6 +23,8 @@ import (
 	"github.com/keighl/mandrill"
 )
 
+const currentVersion string = "1.0"
+
 const defaultConcurrency = 8
 
 //worker sleep duration (hours)
@@ -99,6 +101,7 @@ var (
 	info         = flag.Bool("info", false, "Print certificate info.")
 	noTimeStamps = flag.Bool("nots", false, "Don't print timestamps in info/error messages.")
 	compare      = flag.Bool("compare", false, "Easily compare results by exclusing timestamps and certificate expiration (implies -info, -nots).")
+	version      = flag.Bool("version", false, "Display version info.")
 )
 
 var hostsParameter string
@@ -125,23 +128,24 @@ func main() {
 	flag.Parse()
 
 	if *help {
-		flag.Usage()
+		printUsage()
+		return
+	}
+
+	if *version {
+		fmt.Println("check-tls-certs version " + currentVersion)
 		return
 	}
 
 	// checks
 	if len(*hostsFile) == 0 && len(flag.Args()) == 0 {
 		fmt.Print("Invalid Command: Missing -hosts flag or host parameter\n\n")
-		fmt.Print("check-tls-certs [-flag value] [host]\n\n")
-		flag.Usage()
-		fmt.Println()
+		printUsage()
 		return
 	}
 	if len(*hostsFile) >= 1 && len(flag.Args()) >= 1 {
 		fmt.Print("Invalid Command: Use either -hosts flag or host parameter\n\n")
-		fmt.Print("check-tls-certs [-flag value] [host]\n\n")
-		flag.Usage()
-		fmt.Println()
+		printUsage()
 		return
 	}
 	if len(*hostsFile) == 0 && len(flag.Args()) >= 1 {
@@ -186,6 +190,12 @@ func startUp() {
 		log.Println("Using IPV6")
 	}
 	processHosts()
+}
+
+func printUsage() {
+	fmt.Print("check-tls-certs [-flag value] [host]\n\n")
+	flag.Usage()
+	fmt.Println()
 }
 
 func buildErrorMessage(host, error string) string {
