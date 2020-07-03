@@ -101,6 +101,8 @@ var (
 	compare      = flag.Bool("compare", false, "Easily compare results by exclusing timestamps and certificate expiration (implies -info, -nots).")
 )
 
+var hostsParameter string
+
 type certErrors struct {
 	commonName string
 	errs       []error
@@ -126,9 +128,27 @@ func main() {
 		flag.Usage()
 		return
 	}
-	if len(*hostsFile) == 0 {
-		*hostsFile = "hosts"
+
+	// checks
+	if len(*hostsFile) == 0 && len(flag.Args()) == 0 {
+		fmt.Print("Invalid Command: Missing -hosts flag or host parameter\n\n")
+		fmt.Print("check-tls-certs [-flag value] [host]\n\n")
+		flag.Usage()
+		fmt.Println()
+		return
 	}
+	if len(*hostsFile) >= 1 && len(flag.Args()) >= 1 {
+		fmt.Print("Invalid Command: Use either -hosts flag or host parameter\n\n")
+		fmt.Print("check-tls-certs [-flag value] [host]\n\n")
+		flag.Usage()
+		fmt.Println()
+		return
+	}
+	if len(*hostsFile) == 0 && len(flag.Args()) >= 1 {
+		hostsParameter = flag.Arg(0)
+	}
+
+	// defaults
 	if *warnYears < 0 {
 		*warnYears = 0
 	}
@@ -148,6 +168,7 @@ func main() {
 		*info = true
 		*noTimeStamps = true
 	}
+
 	if *daemon {
 		for {
 			startUp()
@@ -280,11 +301,18 @@ func queueHosts(done <-chan struct{}) <-chan string {
 	go func() {
 		defer close(hosts)
 
-		fileContents, err := ioutil.ReadFile(*hostsFile)
-		if err != nil {
-			return
+		var lines []string
+
+		if *hostsFile != "" {
+			fileContents, err := ioutil.ReadFile(*hostsFile)
+			if err != nil {
+				return
+			}
+			lines = strings.Split(string(fileContents), "\n")
+		} else {
+			lines = strings.Split(hostsParameter, ",")
 		}
-		lines := strings.Split(string(fileContents), "\n")
+
 		for _, line := range lines {
 			host := strings.TrimSpace(line)
 			if len(host) == 0 || host[0] == '#' {
