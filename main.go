@@ -315,6 +315,7 @@ func queueHosts(done <-chan struct{}) <-chan string {
 
 		for _, line := range lines {
 			host := strings.TrimSpace(line)
+			host = addDefaultSSLPort(host)
 			if len(host) == 0 || host[0] == '#' {
 				continue
 			}
@@ -340,6 +341,14 @@ func processQueue(done <-chan struct{}, hosts <-chan string, results chan<- host
 			}
 		}
 	}
+}
+
+func addDefaultSSLPort(host string) string {
+	if !strings.Contains(host, ":") {
+		return host + ":443"
+	}
+
+	return host
 }
 
 func getIPsWithPort(host string) []string {
