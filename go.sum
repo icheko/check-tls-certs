@@ -1,0 +1,4 @@
+github.com/certifi/gocertifi v0.0.0-20150906030631-84c0a38a18fc h1:zSPFItDTOJZPds+bvH1oUROiqhUfeKHaNIwnDuyhUjY=
+github.com/certifi/gocertifi v0.0.0-20150906030631-84c0a38a18fc/go.mod h1:GJKEexRPVJrBSOjoqN5VNOIKJ5Q3RViH6eu3puDRwx4=
+github.com/keighl/mandrill v0.0.0-20150710142848-5d7133fb578a h1:sraBhVl+VdZna2syT1uQMkLyXqPJo1DEfb8WRTqVSNI=
+github.com/keighl/mandrill v0.0.0-20150710142848-5d7133fb578a/go.mod h1:+mEDstlvUwlcUrduEzwxRm8q3GnjOa7GlNVJdgvWpiU=
