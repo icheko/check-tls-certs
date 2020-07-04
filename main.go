@@ -101,6 +101,7 @@ var (
 	info         = flag.Bool("info", false, "Print certificate info.")
 	noTimeStamps = flag.Bool("nots", false, "Don't print timestamps in info/error messages.")
 	compare      = flag.Bool("compare", false, "Easily compare results by exclusing timestamps and certificate expiration (implies -info, -nots).")
+	sendEmail    = flag.Bool("sendemail", false, "Send email if certificate errors are found.")
 	version      = flag.Bool("version", false, "Display version info.")
 )
 
@@ -291,12 +292,15 @@ func processHosts() {
 	}
 
 	fmt.Println(certMessages)
-	os.Exit(1)
 
-	emailDetails := &emailDetails{}
-	emailDetails.subject = "Heroku app - check certificate details"
-	emailDetails.mail_text = certMessages
-	//sendMail(email_details)
+	if *sendEmail {
+		emailDetails := &emailDetails{}
+		emailDetails.subject = "Heroku app - check certificate details"
+		emailDetails.mail_text = certMessages
+		sendMail(emailDetails)
+	}
+
+	os.Exit(1)
 }
 
 // return current time in YYYY-MM-dd HH:mm:ss
