@@ -24,7 +24,7 @@ import (
 	"github.com/keighl/mandrill"
 )
 
-const currentVersion string = "1.0"
+const currentVersion string = "1.1"
 
 const defaultConcurrency = 8
 
