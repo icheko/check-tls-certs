@@ -329,10 +329,10 @@ func queueHosts(done <-chan struct{}) <-chan string {
 
 		for _, line := range lines {
 			host := strings.TrimSpace(line)
-			host = addDefaultSSLPort(host)
 			if len(host) == 0 || host[0] == '#' {
 				continue
 			}
+			host = addDefaultSSLPort(host)
 			select {
 			case hosts <- host:
 			case <-done:
