@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/tls"
 	"crypto/x509"
@@ -102,6 +103,7 @@ var (
 	noTimeStamps = flag.Bool("nots", false, "Don't print timestamps in info/error messages.")
 	compare      = flag.Bool("compare", false, "Easily compare results by exclusing timestamps and certificate expiration (implies -info, -nots).")
 	sendEmail    = flag.Bool("sendemail", false, "Send email if certificate errors are found.")
+	stdIn        = flag.Bool("stdin", false, "Read hosts from stdin.")
 	version      = flag.Bool("version", false, "Display version info.")
 )
 
@@ -139,17 +141,17 @@ func main() {
 	}
 
 	// checks
-	if len(*hostsFile) == 0 && len(flag.Args()) == 0 {
+	if len(*hostsFile) == 0 && len(flag.Args()) == 0 && *stdIn == false {
 		fmt.Print("Invalid Command: Missing -hosts flag or host parameter\n\n")
 		printUsage()
 		return
 	}
-	if len(*hostsFile) >= 1 && len(flag.Args()) >= 1 {
+	if len(*hostsFile) >= 1 && len(flag.Args()) >= 1 && *stdIn == false {
 		fmt.Print("Invalid Command: Use either -hosts flag or host parameter\n\n")
 		printUsage()
 		return
 	}
-	if len(*hostsFile) == 0 && len(flag.Args()) >= 1 {
+	if len(*hostsFile) == 0 && len(flag.Args()) >= 1 && *stdIn == false {
 		hostsParameter = flag.Arg(0)
 	}
 
@@ -310,6 +312,14 @@ func getCurrentTime() string {
 	return currentTime
 }
 
+func removeNewLineChar(str string) string {
+	if strings.Contains(str, "\n") {
+		return strings.Replace(str, "\n", "", 1)
+	}
+
+	return str
+}
+
 func queueHosts(done <-chan struct{}) <-chan string {
 	hosts := make(chan string)
 	go func() {
@@ -323,8 +333,19 @@ func queueHosts(done <-chan struct{}) <-chan string {
 				return
 			}
 			lines = strings.Split(string(fileContents), "\n")
-		} else {
+		} else if hostsParameter != "" {
 			lines = strings.Split(hostsParameter, ",")
+		} else {
+			reader := bufio.NewReader(os.Stdin)
+
+			for {
+				input, err := reader.ReadString('\n')
+				if err != nil {
+					break
+				}
+				input = removeNewLineChar(input)
+				lines = append(lines, input)
+			}
 		}
 
 		for _, line := range lines {
