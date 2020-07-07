@@ -345,8 +345,13 @@ func queueHosts(done <-chan struct{}) <-chan string {
 
 func processQueue(done <-chan struct{}, hosts <-chan string, results chan<- hostResult) {
 	for host := range hosts {
-		ips := getIPsWithPort(host)
-		// log.Println("Host: " + host + " IPs: " + strings.Join(ips, ", "))
+		ips, err := getIPsWithPort(host)
+		if err != nil {
+			results <- hostResult{
+				host: host,
+				err:  err,
+			}
+		}
 		for _, ip := range ips {
 			select {
 			case results <- checkHost(ip, host):
@@ -365,9 +370,9 @@ func addDefaultSSLPort(host string) string {
 	return host
 }
 
-func getIPsWithPort(host string) []string {
+func getIPsWithPort(host string) ([]string, error) {
 	filteredIps := []string{}
-	ips := getIPs(getHost(host))
+	ips, err := getIPs(getHost(host))
 	for _, ip := range ips {
 		if *useIPV6 == false && isIPv4(ip) {
 			filteredIps = append(filteredIps, ip+":"+getPort(host))
@@ -376,7 +381,7 @@ func getIPsWithPort(host string) []string {
 		}
 	}
 
-	return filteredIps
+	return filteredIps, err
 }
 
 func isIPv4(address string) bool {
@@ -387,12 +392,9 @@ func isIPv6(address string) bool {
 	return strings.Count(address, ":") >= 2
 }
 
-func getIPs(host string) []string {
+func getIPs(host string) ([]string, error) {
 	ips, err := net.LookupHost(host)
-	if err != nil {
-		panic(err)
-	}
-	return ips
+	return ips, err
 }
 
 func getHost(host string) string {
