@@ -26,6 +26,7 @@ This app uses the following options:
 - `-compare`: Easily compare results by exclusing timestamps and certificate expiration (implies -info, -nots).
 - `-sendemail`: Send email if certificate errors are found.
 - `-timeout`: Connection timeout.
+- `-debug`: Output debug messages.
 - `-d`: Start in daemon mode.
 
 Examples usage:

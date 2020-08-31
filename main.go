@@ -105,6 +105,7 @@ var (
 	sendEmail    = flag.Bool("sendemail", false, "Send email if certificate errors are found.")
 	stdIn        = flag.Bool("stdin", false, "Read hosts from stdin.")
 	timeout      = flag.Int("timeout", 15, "Connection timeout.")
+	debug        = flag.Bool("debug", false, "Output debug messages.")
 	version      = flag.Bool("version", false, "Display version info.")
 )
 
@@ -453,7 +454,9 @@ func checkHost(ip string, host string) (result hostResult) {
 	}
 	defer ipConn.Close()
 
-	// fmt.Printf("%s DEBUG: Client connected to %s\n", getCurrentTime(), ipConn.RemoteAddr())
+	if *debug {
+		fmt.Printf("%s DEBUG: Client connected to %s\n", getCurrentTime(), ipConn.RemoteAddr())
+	}
 
 	conn := tls.Client(ipConn, &config)
 	defer conn.Close()
@@ -466,7 +469,10 @@ func checkHost(ip string, host string) (result hostResult) {
 		})
 		return
 	}
-	// fmt.Printf("%s DEBUG: TLS Handshake succeeded for %s\n", getCurrentTime(), conn.RemoteAddr())
+
+	if *debug {
+		fmt.Printf("%s DEBUG: TLS Handshake succeeded for %s\n", getCurrentTime(), conn.RemoteAddr())
+	}
 
 	timeNow := time.Now()
 	checkedCerts := make(map[string]struct{})
