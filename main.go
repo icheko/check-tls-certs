@@ -104,6 +104,7 @@ var (
 	compare      = flag.Bool("compare", false, "Easily compare results by exclusing timestamps and certificate expiration (implies -info, -nots).")
 	sendEmail    = flag.Bool("sendemail", false, "Send email if certificate errors are found.")
 	stdIn        = flag.Bool("stdin", false, "Read hosts from stdin.")
+	timeout      = flag.Int("timeout", 15, "Connection timeout.")
 	version      = flag.Bool("version", false, "Display version info.")
 )
 
@@ -277,7 +278,9 @@ func processHosts() {
 			}
 		}
 		// cert info
-		certInfoMessages += buildCertInfoMessage(r.host, r.ip, r.certInfo.info)
+		if r.certInfo != (certInfo{}) {
+			certInfoMessages += buildCertInfoMessage(r.host, r.ip, r.certInfo.info)
+		}
 	}
 
 	if certInfoMessages != "" && *info {
@@ -437,17 +440,33 @@ func checkHost(ip string, host string) (result hostResult) {
 
 	//load ca certs. bundle
 	certPool, err := gocertifi.CACerts()
-	config := &tls.Config{
+	config := tls.Config{
 		RootCAs:    certPool,
 		ServerName: getHost(host),
 	}
-	conn, err := tls.Dial("tcp", ip, config)
+
+	ipConn, err := net.DialTimeout("tcp", ip, time.Duration(*timeout)*time.Second)
 
 	if err != nil {
 		result.err = err
 		return
 	}
+	defer ipConn.Close()
+
+	// fmt.Printf("%s DEBUG: Client connected to %s\n", getCurrentTime(), ipConn.RemoteAddr())
+
+	conn := tls.Client(ipConn, &config)
 	defer conn.Close()
+
+	// Handshake with TLS to get cert
+	hsErr := conn.Handshake()
+	if hsErr != nil {
+		result.certs = append(result.certs, certErrors{
+			errs: append([]error{}, fmt.Errorf("%v (%v) %s", config.ServerName, ip, hsErr.Error())),
+		})
+		return
+	}
+	// fmt.Printf("%s DEBUG: TLS Handshake succeeded for %s\n", getCurrentTime(), conn.RemoteAddr())
 
 	timeNow := time.Now()
 	checkedCerts := make(map[string]struct{})

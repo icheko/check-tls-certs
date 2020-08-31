@@ -25,6 +25,7 @@ This app uses the following options:
 - `-nots`: Don't print timestamps in info/error messages.
 - `-compare`: Easily compare results by exclusing timestamps and certificate expiration (implies -info, -nots).
 - `-sendemail`: Send email if certificate errors are found.
+- `-timeout`: Connection timeout.
 - `-d`: Start in daemon mode.
 
 Examples usage:
