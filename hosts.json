@@ -1,0 +1,26 @@
+{
+    "version": "1",
+    "hosts": [
+        {
+            "name": "Google",
+            "domain": "google.com"
+        },
+        {
+            "name": "Gmail",
+            "domain": "gmail.com",
+            "ip-resolution": "defined",
+            "ips": [
+                "172.217.1.37"
+            ]
+        },
+        {
+            "name": "Tesla",
+            "domain": "tesla.com",
+            "ip-resolution": "defined",
+            "ips": [
+                "199.66.11.62"
+            ],
+            "tls-cert-valid-for": "my.tesla.com"
+        }
+    ]
+}

@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -24,7 +25,7 @@ import (
 	"github.com/keighl/mandrill"
 )
 
-const currentVersion string = "1.2"
+const currentVersion string = "1.3"
 
 const defaultConcurrency = 8
 
@@ -90,23 +91,24 @@ var sunsetSigAlgs = map[x509.SignatureAlgorithm]sigAlgSunset{
 }
 
 var (
-	help         = flag.Bool("help", false, "Show help screen.")
-	hostsFile    = flag.String("hosts", "", "The path to the file containing a list of hosts to check.")
-	warnYears    = flag.Int("years", 0, "Warn if the certificate will expire within this many years.")
-	warnMonths   = flag.Int("months", 0, "Warn if the certificate will expire within this many months.")
-	warnDays     = flag.Int("days", 0, "Warn if the certificate will expire within this many days.")
-	checkSigAlg  = flag.Bool("check-sig-alg", true, "Verify that non-root certificates are using a good signature algorithm.")
-	concurrency  = flag.Int("concurrency", defaultConcurrency, "Maximum number of hosts to check at once.")
-	useIPV6      = flag.Bool("ipv6", false, "Use IPV6 to establish connections.")
-	daemon       = flag.Bool("d", false, "Start in daemon mode.")
-	info         = flag.Bool("info", false, "Print certificate info.")
-	noTimeStamps = flag.Bool("nots", false, "Don't print timestamps in info/error messages.")
-	compare      = flag.Bool("compare", false, "Easily compare results by exclusing timestamps and certificate expiration (implies -info, -nots).")
-	sendEmail    = flag.Bool("sendemail", false, "Send email if certificate errors are found.")
-	stdIn        = flag.Bool("stdin", false, "Read hosts from stdin.")
-	timeout      = flag.Int("timeout", 15, "Connection timeout.")
-	debug        = flag.Bool("debug", false, "Output debug messages.")
-	version      = flag.Bool("version", false, "Display version info.")
+	help          = flag.Bool("help", false, "Show help screen.")
+	hostsFile     = flag.String("hosts", "", "The path to the file containing a list of hosts to check.")
+	hostsJSONFile = flag.String("hostsJSON", "", "The path to the file containing a JSON structured list of hosts to check.")
+	warnYears     = flag.Int("years", 0, "Warn if the certificate will expire within this many years.")
+	warnMonths    = flag.Int("months", 0, "Warn if the certificate will expire within this many months.")
+	warnDays      = flag.Int("days", 0, "Warn if the certificate will expire within this many days.")
+	checkSigAlg   = flag.Bool("check-sig-alg", true, "Verify that non-root certificates are using a good signature algorithm.")
+	concurrency   = flag.Int("concurrency", defaultConcurrency, "Maximum number of hosts to check at once.")
+	useIPV6       = flag.Bool("ipv6", false, "Use IPV6 to establish connections.")
+	daemon        = flag.Bool("d", false, "Start in daemon mode.")
+	info          = flag.Bool("info", false, "Print certificate info.")
+	noTimeStamps  = flag.Bool("nots", false, "Don't print timestamps in info/error messages.")
+	compare       = flag.Bool("compare", false, "Easily compare results by exclusing timestamps and certificate expiration (implies -info, -nots).")
+	sendEmail     = flag.Bool("sendemail", false, "Send email if certificate errors are found.")
+	stdIn         = flag.Bool("stdin", false, "Read hosts from stdin.")
+	timeout       = flag.Int("timeout", 15, "Connection timeout.")
+	debug         = flag.Bool("debug", false, "Output debug messages.")
+	version       = flag.Bool("version", false, "Display version info.")
 )
 
 var hostsParameter string
@@ -143,13 +145,8 @@ func main() {
 	}
 
 	// checks
-	if len(*hostsFile) == 0 && len(flag.Args()) == 0 && *stdIn == false {
-		fmt.Print("Invalid Command: Missing -hosts flag or host parameter\n\n")
-		printUsage()
-		return
-	}
-	if len(*hostsFile) >= 1 && len(flag.Args()) >= 1 && *stdIn == false {
-		fmt.Print("Invalid Command: Use either -hosts flag or host parameter\n\n")
+	if len(*hostsFile) == 0 && len(*hostsJSONFile) == 0 && len(flag.Args()) == 0 && *stdIn == false {
+		fmt.Print("Invalid Command: Use either -hosts, -hostsJSON, -stdin or host parameter\n\n")
 		printUsage()
 		return
 	}
@@ -230,15 +227,25 @@ func buildCertInfoMessage(host, ip, info string) string {
 func processHosts() {
 	done := make(chan struct{})
 	defer close(done)
-
-	hosts := queueHosts(done)
+	hosts := make(<-chan string)
+	hostsStruct := make(<-chan Host)
 	results := make(chan hostResult)
+
+	if *hostsJSONFile != "" {
+		hostsStruct = queueJSONHosts(done)
+	} else {
+		hosts = queueHosts(done)
+	}
 
 	var wg sync.WaitGroup
 	wg.Add(*concurrency)
 	for i := 0; i < *concurrency; i++ {
 		go func() {
-			processQueue(done, hosts, results)
+			if *hostsJSONFile != "" {
+				processQueuedHosts(done, hostsStruct, results)
+			} else {
+				processQueue(done, hosts, results)
+			}
 			wg.Done()
 		}()
 	}
@@ -324,6 +331,44 @@ func removeNewLineChar(str string) string {
 	return str
 }
 
+type JSONHosts struct {
+	Version string `json:"version"`
+	Hosts   []Host `json:"hosts"`
+}
+
+type Host struct {
+	Name            string   `json:"name"`
+	Domain          string   `json:"domain"`
+	IPResolution    string   `json:"ip-resolution"`
+	Ips             []string `json:"ips,omitempty"`
+	TLSCertValidFor string   `json:"tls-cert-valid-for,omitempty"`
+}
+
+func queueJSONHosts(done <-chan struct{}) <-chan Host {
+	hosts := make(chan Host)
+	go func() {
+		defer close(hosts)
+
+		fileContents, err := ioutil.ReadFile(*hostsJSONFile)
+		if err != nil {
+			panic(err.Error())
+		}
+		var jsonvar JSONHosts
+		// log.Println("Reading ... " + *hostsJSONFile)
+		json.Unmarshal(fileContents, &jsonvar)
+		// log.Println(jsonvar)
+
+		for _, host := range jsonvar.Hosts {
+			select {
+			case hosts <- host:
+			case <-done:
+				return
+			}
+		}
+	}()
+	return hosts
+}
+
 func queueHosts(done <-chan struct{}) <-chan string {
 	hosts := make(chan string)
 	go func() {
@@ -380,6 +425,50 @@ func processQueue(done <-chan struct{}, hosts <-chan string, results chan<- host
 		for _, ip := range ips {
 			select {
 			case results <- checkHost(ip, host):
+			case <-done:
+				return
+			}
+		}
+	}
+}
+
+func processQueuedHosts(done <-chan struct{}, hosts <-chan Host, results chan<- hostResult) {
+	for host := range hosts {
+		var domain string
+		var ips []string
+
+		if *debug {
+			log.Println("DEBUG: Processing ... " + host.Name)
+		}
+
+		if host.TLSCertValidFor != "" {
+			if *debug {
+				log.Println("DEBUG: Using tls-cert-valid-for value for " + host.Domain)
+			}
+			domain = host.TLSCertValidFor
+		} else {
+			domain = host.Domain
+		}
+		domain = addDefaultSSLPort(domain)
+
+		if host.IPResolution == "dns" || host.IPResolution == "" {
+			var err error
+			ips, err = getIPsWithPort(addDefaultSSLPort(host.Domain))
+			if err != nil {
+				results <- hostResult{
+					host: host.Domain,
+					err:  err,
+				}
+			}
+		} else if host.IPResolution == "defined" {
+			ips = host.Ips
+		} else {
+			panic("Invalid value for ip-resolution: " + host.IPResolution)
+		}
+
+		for _, ip := range ips {
+			select {
+			case results <- checkHost(addDefaultSSLPort(ip), domain):
 			case <-done:
 				return
 			}
