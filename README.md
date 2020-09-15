@@ -15,6 +15,7 @@ To receive e-mail notifications, you'll need to specify the following OS environ
 
 This app uses the following options:
 - `-hosts`: path to a file containing a list of hosts to check. Each line uses the syntax `hostname:port`, empty lines or lines that start with `#` are ignored.
+- `-hostsJSON`: path to a file containing a JSON structured list of hosts to check.
 - `-years`: warn if the certificate expires within X years. Defaults to 0 years.
 - `-months`: warn if the certificate expires within X months. Defaults to 0 months.
 - `-days`: warn if the certificate expires within X days. Defaults to 30 days.
@@ -43,6 +44,16 @@ Examples usage:
 2020/07/03 16:54:36 CERT-ERROR: gmail.com: '172.217.9.5:443' (S/N 658833231F511D8C080000000047F009) expires in roughly 67 days.
 2020/07/03 16:54:36 CERT-ERROR: *.google.com: '172.217.2.238:443' (S/N 7E10D901F7AC03CD080000000047EF8E) expires in roughly 67 days.
 ```
+
+#### JSON Hosts
+
+A JSON list of hosts is supported via `-hostsJSON` option. Each host entry needs the `name` and `domain` properties defined. See `hosts.json` for an example.
+
+##### Optional Properties
+
+- `ip-resolution` - Default value: `dns` - For some cases, you may want to define a list of IP's to use instead of DNS resolution. Set this value to `defined` and also include the `ips` property.
+- `ips` - Required when `ip-resolution` = `defined` - An array of IPs to use instead of those resolved through DNS.
+- `tls-cert-valid-for` - Set this property when the connecting domain doesn't match with the domains defined in the certificate.
 
 ### Install with Homebrew
 
